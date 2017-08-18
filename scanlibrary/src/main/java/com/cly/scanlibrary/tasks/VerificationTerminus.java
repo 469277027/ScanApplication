@@ -20,7 +20,8 @@ public class VerificationTerminus extends Verification {
     protected void performService() {
         final Random random = new Random(25);
         boolean state = random.nextBoolean();
-        d(this +  "--> updateTerminus:state = " + state);
-        assembler.scanDatas().updateTerminus(state);
+        d(this + "--> updateTerminus:state = " + state);
+        if (state)
+            assembler.scanDatas().codeError();
     }
 }

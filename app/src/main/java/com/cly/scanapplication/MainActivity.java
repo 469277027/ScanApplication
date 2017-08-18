@@ -14,9 +14,11 @@ import com.cly.scanapplication.internet.InitCountryService;
 import com.cly.scanlibrary.Scan;
 import com.cly.scanlibrary.business.InternetBusiness;
 import com.cly.scanlibrary.entity.BillCodeDatasBean;
+import com.cly.scanlibrary.entity.ScanInitDatas;
 import com.elvishew.xlog.LogConfiguration;
 import com.elvishew.xlog.LogLevel;
 import com.elvishew.xlog.XLog;
+import com.lc.greendaolibrary.DbManager;
 import com.lc.greendaolibrary.dao.ReceiveCountry;
 import com.lc.greendaolibrary.dao.SenderCountry;
 import com.lc.greendaolibrary.gen.DaoMaster;
@@ -40,7 +42,7 @@ import rx.Subscriber;
 import rx.functions.Func1;
 import rx.schedulers.Schedulers;
 
-public class MainActivity extends AppCompatActivity implements InternetBusiness.OnGetBillCodeListener, Scan.ScanListener {
+public class MainActivity extends AppCompatActivity implements InternetBusiness.OnGetBillCodeListener {
 
     private static final String TAG = "MainActivity";
     private DaoSession daoSession;
@@ -61,7 +63,6 @@ public class MainActivity extends AppCompatActivity implements InternetBusiness.
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        Scan.setListener(this);
 
         initViews();
 
@@ -102,6 +103,13 @@ public class MainActivity extends AppCompatActivity implements InternetBusiness.
                 billCodeInfo.setText(info.toString());
             }
         });
+
+        findViewById(R.id.close).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Scan.closeCar(billCode.getText().toString());
+            }
+        });
     }
 
     private void initCountryDatas() {
@@ -128,7 +136,16 @@ public class MainActivity extends AppCompatActivity implements InternetBusiness.
                     @Override
                     public void onCompleted() {
                         isDBFinish = true;
-                        Scan.init("http://118.178.187.230:1880/web/App.asq?/", "f37940fe4327a449b183b733153e8746");
+
+                        Scan.context = MainActivity.this.getApplicationContext();
+
+                        ScanInitDatas initDatas = new ScanInitDatas("http://118.178.187.230:1880/web/App.asq?/",
+                                "baa66be21da6e96f4f17298008e878e6",
+                                "装车",
+                                "孟凡生1",
+                                "哈尔滨");
+
+                        Scan.init(initDatas);
 //                        testDB();
                     }
 
@@ -197,7 +214,7 @@ public class MainActivity extends AppCompatActivity implements InternetBusiness.
 
                 Request request = original.newBuilder()
                         .header("postman-token", "e22671c2-56b1-2c77-4d0f-3729bf128b2b")
-                        .header("Authorization", "Basic f37940fe4327a449b183b733153e8746")
+                        .header("Authorization", "Basic baa66be21da6e96f4f17298008e878e6")
                         .header("AppVersion", String.valueOf(com.cly.scanlibrary.BuildConfig.MODULE_VERSION))
                         .method(original.method(), original.body())
                         .build();
@@ -238,10 +255,10 @@ public class MainActivity extends AppCompatActivity implements InternetBusiness.
     }
 
     private void initDatabase() {
-        MyOpenHelper helper = new MyOpenHelper(getApplicationContext(), "scan_db", null);
-        SQLiteDatabase db = helper.getWritableDatabase();
-        DaoMaster master = new DaoMaster(db);
-        daoSession = master.newSession();
+//        MyOpenHelper helper = new MyOpenHelper(getApplicationContext(), "scan_db", null);
+//        SQLiteDatabase db = helper.getWritableDatabase();
+//        DaoMaster master = new DaoMaster(db);
+        daoSession = DbManager.getINSTANCE(this).getDaoSession();
     }
 
     private void initLog() {
@@ -274,19 +291,4 @@ public class MainActivity extends AppCompatActivity implements InternetBusiness.
         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
     }
 
-    @Override
-    public void billCodeEmpty() {
-
-    }
-
-    @Override
-    public void unusualInterrupted() {
-
-    }
-
-    @Override
-    public void stopSuccess() {
-        info.append("停止成功").append("\n");
-        billCodeInfo.setText(info.toString());
-    }
 }

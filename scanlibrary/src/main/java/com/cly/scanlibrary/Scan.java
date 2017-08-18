@@ -1,26 +1,23 @@
 package com.cly.scanlibrary;
 
-import android.os.Handler;
-import android.os.Looper;
+import android.content.Context;
 
+import com.cly.scanlibrary.business.DbBusiness;
 import com.cly.scanlibrary.business.InternetBusiness;
+import com.cly.scanlibrary.business.ScanBusiness;
 import com.cly.scanlibrary.entity.BillCodeDatasBean;
 import com.cly.scanlibrary.entity.ScanCommon;
-import com.cly.scanlibrary.entity.ScanDatas;
+import com.cly.scanlibrary.entity.ScanInitDatas;
 import com.cly.scanlibrary.entity.SettingsBean;
 import com.cly.scanlibrary.internet.HttpResult;
 import com.cly.scanlibrary.internet.ScanSubscriber;
-import com.cly.scanlibrary.tasks.ScanManager;
 import com.cly.scanlibrary.utils.Log;
+import com.cly.scanlibrary.utils.ReadSettings;
+import com.lc.greendaolibrary.dao.scan.ScanMain;
+import com.lc.greendaolibrary.dao.scan.ScanSub;
 
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-
-import rx.Observable;
-import rx.Subscriber;
-import rx.android.schedulers.AndroidSchedulers;
-import rx.schedulers.Schedulers;
+import java.text.SimpleDateFormat;
+import java.util.List;
 
 /**
  * 扫码暴露出的类，和UI做数据交互
@@ -30,55 +27,46 @@ import rx.schedulers.Schedulers;
 public class Scan {
 
     /**
-     * 扫描任务管理类
-     */
-    private static ScanManager mINSTANCE;
-    /**
-     * 扫描任务线程池
-     */
-    private static ExecutorService executorService;
-    /**
      * Http请求业务类
      */
     private static InternetBusiness internetBusiness;
     /**
-     * 扫描相关监听器
+     * 扫码业务类
      */
-    private static ScanListener scanListener;
+    private static ScanBusiness scanBusiness;
     /**
-     * 强制终止任务锁
+     * 数据库业务类
      */
-    private static final Object stopLock = new Object();
+    private static DbBusiness dbBusiness;
+
 
     /**
      * 是否开始扫描
      */
     private static boolean isStarted = false;
 
-    private static Looper looper = Looper.getMainLooper();
-    private static Handler handler = new Handler(looper);
 
-//    private static InternetBusiness.OnGetBillCodeListener billCodeListener;
+    public static Context context;
+
 
     /**
      * 扫码相关初始化
      *
-     * @param domainName 网络请求域名
-     * @param token      网络请求token
+     * @param initDatas 扫码相关信息
      */
-    public static void init(String domainName, String token) {
-        ScanCommon.domainName = domainName;
-        ScanCommon.token = token;
+    public static void init(ScanInitDatas initDatas) {
+
+        ScanCommon.domainName = initDatas.getDomainName();
+        ScanCommon.token = initDatas.getToken();
+        ScanCommon.scanType = initDatas.getScanType();
+        ScanCommon.scanOperator = initDatas.getScanOperator();
+        ScanCommon.scanCompany = initDatas.getScanCompany();
 
         internetBusiness = InternetBusiness.getINSTANCE();
+        scanBusiness = ScanBusiness.getINSTANCE();
+        dbBusiness = DbBusiness.getINSTANCE(context);
         getSettings();
 
-        executorService = Executors.newCachedThreadPool();
-        mINSTANCE = new ScanManager(executorService);
-    }
-
-    public static void setListener(ScanListener listener) {
-        scanListener = listener;
     }
 
     /**
@@ -97,120 +85,65 @@ public class Scan {
                 throw new RuntimeException("please call init() before");
             }
 
-            if (isInternet && ScanCommon.scanBillCodeDatas == null) {
-                scanListener.billCodeEmpty();
-                return;
-            }
+            if (isInternet && ScanCommon.scanBillCodeDatas != null) {
 
-            executorService = Executors.newCachedThreadPool();
-            executorService.execute(mINSTANCE);
-            isStarted = true;
-        }
-
-    }
-
-
-    /**
-     * 尝试终止任务的线程
-     */
-    private static class TryStop implements Runnable {
-
-        @Override
-        public void run() {
-
-            try {
-                synchronized (stopLock) {
-                    if (!isStarted)
-                        return;
-
-                    if (!executorService.isTerminated()) {
-                        scanListener.unusualInterrupted();
-                        wait();
-                    }
-                    executorService.shutdownNow();
+                if (dbBusiness.isBillCodeExist(ScanCommon.scanBillCodeDatas.getTransportBillCode())) {
+                    Log.d(Scan.class, "--> start:新建列表");
+                    ScanMain scanMain = new ScanMain();
+                    scanMain.setScanType(ScanCommon.scanType);
+                    scanMain.setMainID(System.currentTimeMillis());
+                    scanMain.setState(ScanCommon.ScanState.STATE_SUCCESS);
+                    scanMain.setTransportBillCode(ScanCommon.scanBillCodeDatas.getTransportBillCode());
+                    scanMain.setTransportBillType(ScanCommon.scanBillCodeDatas.getTransportBillType());
+                    scanMain.setBeginScanTime(new SimpleDateFormat("yyyyMMddHHmmss").format(System.currentTimeMillis()));
+                    scanMain.setScanCompany(ScanCommon.scanCompany);
+                    scanMain.setScanOperator(ScanCommon.scanOperator);
+                    scanMain.setReceiveCompany(ScanCommon.scanBillCodeDatas.getReceiveCompany());
+                    scanMain.setReceiveCompany(ScanCommon.transportBillLine);
+                    scanMain.setCarNumber(ScanCommon.scanBillCodeDatas.getCarNumber());
+                    scanMain.setDriverName(ScanCommon.scanBillCodeDatas.getDriverName());
+                    dbBusiness.saveMain(scanMain);
+                } else {
 
                 }
-            } catch (InterruptedException e) {
-                e.printStackTrace();
+
             }
 
+            List<ScanMain> scanMains = dbBusiness.readAllMain();
+            ScanMain scanMain = scanMains.get(0);
+            ScanCommon.curBillCode = scanMain.getTransportBillCode();
+            ScanCommon.curMainID = scanMain.getMainID();
+            Log.d("--> start:scanMains = " + scanMains);
+
+
+            scanBusiness.start();
         }
+
     }
 
     /**
-     * 扫描完成终止任务的线程
+     * 终止扫描任务
      */
-    private static class finishStop implements Runnable {
-
-        @Override
-        public void run() {
-            try {
-                executorService.shutdown();
-                while (executorService.isTerminated()) {
-                    TimeUnit.MILLISECONDS.sleep(100);
-                }
-                scanListener.stopSuccess();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
-    private static void finishStop() {
-
-        Log.d("--> finishStop");
-
-        Observable
-                .create(new Observable.OnSubscribe<Boolean>() {
-                    @Override
-                    public void call(Subscriber<? super Boolean> subscriber) {
-                        Log.d("--> finishStop:call");
-                        try {
-                            Log.d("--> finishStop:call:executorService.isTerminated = " + executorService.isShutdown());
-                            executorService.shutdownNow();
-                            while (!executorService.isShutdown()) {
-                                TimeUnit.MICROSECONDS.sleep(100);
-                            }
-                            subscriber.onNext(true);
-                            subscriber.onCompleted();
-                        } catch (InterruptedException e) {
-                            subscriber.onError(e);
-                        }
-                    }
-                })
-                .subscribeOn(Schedulers.newThread())
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(new Subscriber<Boolean>() {
-                    @Override
-                    public void onCompleted() {
-
-                    }
-
-                    @Override
-                    public void onError(Throwable e) {
-                        e.printStackTrace();
-                    }
-
-                    @Override
-                    public void onNext(Boolean aBoolean) {
-                        if (aBoolean) {
-                            isStarted = false;
-                            scanListener.stopSuccess();
-                        }
-                    }
-                });
-    }
-
     public static void stop() {
-        finishStop();
+        scanBusiness.stop();
     }
 
-    public static void put(ScanDatas scanDatas) {
-        try {
-            mINSTANCE.put(scanDatas);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
+    /**
+     * 添加扫描货运单
+     *
+     * @param scanSub
+     */
+    public static void put(ScanSub scanSub) {
+        scanBusiness.put(scanSub);
+    }
+
+    /**
+     * 封车
+     *
+     * @param billCode 封车码
+     */
+    public static void closeCar(String billCode) {
+        dbBusiness.closeCar(billCode);
     }
 
     /**
@@ -253,6 +186,11 @@ public class Scan {
                     @Override
                     protected void onSuccess(SettingsBean contentBeanHttpResult) {
                         ScanCommon.scanSettings = contentBeanHttpResult;
+                        ScanCommon.firstCodeType = ReadSettings.getFirstCodeType();
+                        ScanCommon.secondCodeType = ReadSettings.getSecondCodeType();
+                        ScanCommon.uploadIntervalTime = Integer.parseInt(ReadSettings.readUploadInterval());
+                        ScanCommon.companyType = ReadSettings.readCompanyType();
+                        ScanCommon.scanDataSavedDate = ReadSettings.readDataLifecyle();
                     }
 
                     @Override
@@ -262,28 +200,67 @@ public class Scan {
                 });
     }
 
-
     /**
-     * 扫码相关监听器
+     * 扫码整体回调接口
      */
     public static interface ScanListener {
 
-        /**
-         * 点击的时候未初始化封车数据
-         */
-        void billCodeEmpty();
+        /*==================扫码回调====================*/
 
         /**
-         * 终止的时候还有线程未完成
+         * 任务启动成功
          */
-        void unusualInterrupted();
+        void startSuccess();
+
+        /**
+         * 任务启动失败
+         */
+        void startError(String msg);
 
         /**
          * 任务关闭成功
          */
-        void stopSuccess();
+        void closeSuccess();
+
+        /**
+         * 任务关闭失败
+         */
+        void closeError();
+
+        /**
+         * 扫描信息存储成功
+         */
+        void saveDataSuccess(ScanSub scanSub);
+
+
+        /*=================数据库回调====================*/
+
+        /**
+         * 获取所有未封车列表
+         */
+        void getScanMainList(List<ScanMain> list);
+
+        /**
+         * 获取选择封车列表下所有数据
+         */
+        void getScanSubListByCode(List<ScanSub> list);
+
+        /*===================设置接口回调=========================*/
+
+        /**
+         * 选择线路（如果有多条线路）
+         */
+        void chooseLines(SettingsBean.LineBean lineBean);
+
+        /*=====================封车码接口回调==========================*/
+
+        /**
+         * 请求成功
+         */
+        void getBillCodeDataSuccess(BillCodeDatasBean billCodeDatasBean);
 
 
     }
+
 
 }

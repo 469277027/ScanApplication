@@ -1,45 +1,47 @@
 package com.cly.scanlibrary.entity;
 
+import com.lc.greendaolibrary.dao.scan.ScanSub;
+
 /**
- * 扫码相关信息
+ * 扫码相关信息包装类
  * Created by 丛龙宇 on 2017/8/16.
  */
 
 public class ScanDatas {
 
-    private String orderNumber;
-    private String scanTime;
-    private boolean isTerminusSure = true, isRepeat = false;
+    private ScanSub scanSub;
 
+    private boolean isCodeError = false,
+            isRepeat = false;
 
-    public ScanDatas(String orderNumber, String scanTime) {
-        this.orderNumber = orderNumber;
-        this.scanTime = scanTime;
+    public ScanDatas(ScanSub scanSub) {
+        this.scanSub = scanSub;
     }
 
-    public synchronized void updateTerminus(boolean state) {
-        isTerminusSure = state;
+    /**
+     * 判断条码是否正确
+     */
+    public synchronized void codeError() {
+        isCodeError = true;
     }
 
-    public synchronized void updateRepeat(boolean state) {
-        isRepeat = state;
+    /**
+     * 判断条码是否重复
+     */
+    public synchronized void repeat() {
+        isRepeat = true;
     }
 
-    public synchronized boolean isTerminusSure() {
-        return isTerminusSure;
+    /**
+     * 更新条码状态
+     */
+    public synchronized void updateSubState() {
+        scanSub.setState(!isCodeError || !isRepeat ? 0 : 2);
     }
 
-    public synchronized boolean isRepeat() {
-        return isRepeat;
+    public synchronized ScanSub getData() {
+        return scanSub;
     }
 
-    @Override
-    public String toString() {
-        return "ScanDatas{" +
-                "orderNumber='" + orderNumber + '\'' +
-                ", scanTime='" + scanTime + '\'' +
-                ", isTerminusSure=" + isTerminusSure +
-                ", isRepeat=" + isRepeat +
-                '}';
-    }
+
 }

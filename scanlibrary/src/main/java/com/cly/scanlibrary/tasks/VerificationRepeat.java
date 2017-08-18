@@ -22,6 +22,7 @@ public class VerificationRepeat extends Verification {
         final Random random = new Random();
         boolean state = random.nextBoolean();
         d(this + "--> updateRepeat:state = " + state);
-        assembler.scanDatas().updateRepeat(state);
+        if (state)
+            assembler.scanDatas().repeat();
     }
 }

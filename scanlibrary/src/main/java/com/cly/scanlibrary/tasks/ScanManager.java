@@ -1,5 +1,6 @@
 package com.cly.scanlibrary.tasks;
 
+import com.cly.scanlibrary.Scan;
 import com.cly.scanlibrary.entity.ScanDatas;
 import com.cly.scanlibrary.utils.ScanQueue;
 import com.cly.scanlibrary.utils.VerificationPool;
@@ -36,6 +37,7 @@ public class ScanManager implements Runnable {
 
         executorService.execute(new Assembler(scanQueue, finishingQueue, pool));
         executorService.execute(new ScanTask(scanQueue));
+        executorService.execute(new SaveTask(finishingQueue));
 
 //        try {
 //            TimeUnit.SECONDS.sleep(7);

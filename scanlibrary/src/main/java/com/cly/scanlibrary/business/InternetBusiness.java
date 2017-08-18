@@ -175,6 +175,18 @@ public class InternetBusiness {
     }
 
     /**
+     * 获取设置回调接口
+     */
+    public static interface OnGetSettingListener extends OnInternetListener<SettingsBean> {
+
+        /**
+         * 如果有多条线路回调
+         */
+        void chooseLine(SettingsBean.LineBean lineBean);
+
+    }
+
+    /**
      * 数据回调顶层接口
      */
     public static interface OnInternetListener<T> {
